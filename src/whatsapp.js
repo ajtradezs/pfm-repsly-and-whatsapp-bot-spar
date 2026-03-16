@@ -3,6 +3,7 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const Anthropic = require('@anthropic-ai/sdk');
 const { teams } = require('../config/teams');
+const { uploadImage } = require('./drive');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -86,9 +87,24 @@ async function handleMessage(msg, groupTeamMap) {
   const messageText = msg.body || '';
   const timestamp = new Date(msg.timestamp * 1000);
 
-  // Count media
+  // Handle media — upload photos to imgbb
   const hasMedia = msg.hasMedia;
   let mediaCount = hasMedia ? 1 : 0;
+  let photoUrl = null;
+
+  if (hasMedia) {
+    try {
+      const media = await msg.downloadMedia();
+      if (media && media.mimetype && media.mimetype.startsWith('image/')) {
+        const ts = timestamp.toISOString().replace(/[:.]/g, '-');
+        const filename = `wa_${senderName.replace(/\s+/g, '_')}_${ts}.jpg`;
+        photoUrl = await uploadImage(media.data, media.mimetype, filename);
+        if (photoUrl) console.log(`[WhatsApp] Photo uploaded: ${photoUrl}`);
+      }
+    } catch (err) {
+      console.error('[WhatsApp] Media download/upload error:', err.message);
+    }
+  }
 
   // Parse message with Claude
   const parsed = await parseMessageWithClaude(senderName, messageText);
@@ -110,6 +126,7 @@ async function handleMessage(msg, groupTeamMap) {
     text: messageText,
     time: timestamp.toISOString(),
     mediaCount,
+    photoUrl,
     parsed
   });
 

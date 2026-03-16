@@ -57,8 +57,10 @@ function buildTeamReport(teamName, repslyData, waData) {
       visitDetails: rep.visitDetails || [],
       waMessages: 0,
       waPhotos: 0,
+      waPhotoUrls: [],
       waActivity: [],
       lastWaTime: null,
+      photoUrls: rep.photoUrls || [],
       storesVisited: new Set((rep.visitDetails || []).map((v) => v.clientName).filter(Boolean)).size
     };
   }
@@ -91,8 +93,10 @@ function buildTeamReport(teamName, repslyData, waData) {
         visitDetails: [],
         waMessages: 0,
         waPhotos: 0,
+        waPhotoUrls: [],
         waActivity: [],
         lastWaTime: null,
+        photoUrls: [],
         storesVisited: 0
       };
     }
@@ -103,10 +107,13 @@ function buildTeamReport(teamName, repslyData, waData) {
 
     for (const msg of messages) {
       rep.waPhotos += msg.mediaCount || 0;
+      if (msg.photoUrl) rep.waPhotoUrls.push(msg.photoUrl);
       if (!rep.lastWaTime || new Date(msg.time) > new Date(rep.lastWaTime)) {
         rep.lastWaTime = msg.time;
       }
     }
+    // Merge all photo URLs: Repsly + WhatsApp
+    rep.photoUrls = [...(rep.photoUrls || []), ...rep.waPhotoUrls];
   }
 
   // Add status to each rep

@@ -101,9 +101,18 @@ async function getVisitsForDate(dateStr) {
   return results;
 }
 
+// Parse Repsly /Date(timestamp+offset)/ format to YYYY-MM-DD
+function parseMsDate(dateStr) {
+  if (!dateStr) return '';
+  const match = String(dateStr).match(/\/Date\((\d+)([+-]\d+)?\)\//);
+  if (match) return new Date(parseInt(match[1])).toISOString().substring(0, 10);
+  return String(dateStr).substring(0, 10);
+}
+
 // GET /v3/export/photos/{timestamp} with pagination
+// Returns per-rep arrays of { repName, repEmail, count, photoUrls[] }
 async function getPhotosForDate(dateStr) {
-  const photoCounts = {};
+  const photoMap = {};
   let timestamp = 0;
 
   try {
@@ -112,18 +121,24 @@ async function getPhotosForDate(dateStr) {
       const res = await axios.get(url, { headers: getAuthHeader() });
       const body = res.data;
       const items = body.Data || body.Photos || [];
-      const totalCount = body.MetaCollectionResult
-        ? body.MetaCollectionResult.TotalCount
-        : body.TotalCount;
-      const lastTimestamp = body.MetaCollectionResult
-        ? body.MetaCollectionResult.LastTimeStamp
-        : body.LastTimeStamp;
+      const meta = body.MetaCollectionResult || {};
+      const totalCount = meta.TotalCount ?? body.TotalCount;
+      const lastTimestamp = meta.LastTimeStamp ?? body.LastTimeStamp;
 
       for (const p of items) {
-        const photoDate = p.DateAndTime ? p.DateAndTime.substring(0, 10) : '';
+        const photoDate = parseMsDate(p.DateAndTime);
         if (photoDate === dateStr) {
           const key = p.RepresentativeEmail || p.RepEmail || p.RepresentativeName || p.RepName || 'unknown';
-          photoCounts[key] = (photoCounts[key] || 0) + 1;
+          if (!photoMap[key]) {
+            photoMap[key] = {
+              repEmail: (p.RepresentativeEmail || p.RepEmail || ''),
+              repName: (p.RepresentativeName || p.RepName || key),
+              count: 0,
+              photoUrls: []
+            };
+          }
+          photoMap[key].count += 1;
+          if (p.PhotoURL) photoMap[key].photoUrls.push(p.PhotoURL);
         }
       }
 
@@ -135,12 +150,7 @@ async function getPhotosForDate(dateStr) {
     console.error('[Repsly] getPhotosForDate error:', err.message);
   }
 
-  // Return array of { repName, repEmail, clientName, count }
-  return Object.entries(photoCounts).map(([key, count]) => ({
-    repEmail: key.includes('@') ? key : '',
-    repName: key.includes('@') ? '' : key,
-    count
-  }));
+  return Object.values(photoMap);
 }
 
 // GET /v3/export/forms/{timestamp} with pagination
@@ -252,6 +262,7 @@ async function getDailyRepSummary(dateStr) {
         repEmail: email || (key.includes('@') ? key : ''),
         checkIns: 0,
         photos: 0,
+        photoUrls: [],
         formsCompleted: 0,
         formNames: [],
         kmTravelled: 0,
@@ -310,6 +321,9 @@ async function getDailyRepSummary(dateStr) {
     const key = getRepKey(p);
     ensureRep(key, p.repName, p.repEmail);
     repMap[key].photos += p.count || 1;
+    if (p.photoUrls && p.photoUrls.length) {
+      repMap[key].photoUrls.push(...p.photoUrls);
+    }
   }
 
   // Process forms

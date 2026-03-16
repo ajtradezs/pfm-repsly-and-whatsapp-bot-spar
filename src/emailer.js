@@ -101,7 +101,8 @@ async function runReportForTeam(team, reportType) {
       waActivity: rep.waMessages,
       lastWaTime: rep.lastWaTime || '',
       repslyFeedback: rep.repslyFeedback || '',
-      waFeedback: rep.waFeedback || ''
+      waFeedback: rep.waFeedback || '',
+      photoLinks: rep.photoUrls || []
     });
   }
 
