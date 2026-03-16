@@ -112,19 +112,27 @@ async function runReportForTeam(team, reportType) {
   const subject = `[${typeLabel}] ${team.name} Activity Report — ${today}`;
   const htmlBody = formatEmailHTML(team.name, reportData, today, sheetUrl);
 
-  // 6. Collect manager email recipients
-  const managerEmails = team.managers.map((m) => m.email).filter(Boolean);
-  const allRecipients = [...new Set([...EMAIL_RECIPIENTS, ...managerEmails])];
+  // 6. Determine recipients — TEST_WA_NUMBER overrides manager numbers during testing
+  const testWaNumber = (process.env.TEST_WA_NUMBER || '').trim();
+  const isTestMode = testWaNumber !== '';
+
+  // Email: use EMAIL_RECIPIENTS env var (already set to test address during testing)
+  const allRecipients = EMAIL_RECIPIENTS.length ? EMAIL_RECIPIENTS : team.managers.map((m) => m.email).filter(Boolean);
 
   // 7. Send email
   await sendEmailReport(team.name, subject, htmlBody, allRecipients);
 
-  // 8. Send WA summary to each manager
+  // 8. Send WA summary — to test number if set, otherwise to each manager
   const waSummary = formatWASummary(team.name, reportData, today, sheetUrl);
-  for (const manager of team.managers) {
-    const waNumber = process.env[manager.waEnvVar];
-    if (waNumber && waNumber.trim() !== '') {
-      await sendWhatsAppToManager(waNumber.trim(), waSummary);
+  if (isTestMode) {
+    console.log(`[Emailer] TEST MODE — sending WA summary to ${testWaNumber}`);
+    await sendWhatsAppToManager(testWaNumber, waSummary);
+  } else {
+    for (const manager of team.managers) {
+      const waNumber = process.env[manager.waEnvVar];
+      if (waNumber && waNumber.trim() !== '') {
+        await sendWhatsAppToManager(waNumber.trim(), waSummary);
+      }
     }
   }
 
