@@ -1,4 +1,7 @@
 // Builds report objects and formats email/WhatsApp output
+const Anthropic = require('@anthropic-ai/sdk');
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // Determine rep status based on check-ins
 function getStatus(checkIns) {
@@ -167,6 +170,8 @@ function formatEmailHTML(teamName, reportData, date, sheetUrl) {
           <td style="padding:8px 12px;text-align:center">${rep.kmTravelled} km</td>
           <td style="padding:8px 12px;font-size:12px">${notesStr}</td>
           <td style="padding:8px 12px;font-size:12px">${waStr}</td>
+          <td style="padding:8px 12px;font-size:12px;color:#1a5276">${rep.repslyFeedback || '—'}</td>
+          <td style="padding:8px 12px;font-size:12px;color:#145a32">${rep.waFeedback || '—'}</td>
           <td style="padding:8px 12px;text-align:center">
             <span style="background:${color};color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:bold">${status}</span>
           </td>
@@ -232,6 +237,8 @@ function formatEmailHTML(teamName, reportData, date, sheetUrl) {
         <th style="padding:10px 12px;text-align:center">KM</th>
         <th style="padding:10px 12px;text-align:left">Notes</th>
         <th style="padding:10px 12px;text-align:left">WA Activity</th>
+        <th style="padding:10px 12px;text-align:left">Repsly Feedback</th>
+        <th style="padding:10px 12px;text-align:left">WhatsApp Feedback</th>
         <th style="padding:10px 12px;text-align:center">Status</th>
       </tr>
     </thead>
@@ -279,8 +286,64 @@ function formatWASummary(teamName, reportData, date, sheetUrl) {
   );
 }
 
+// Generate Repsly + WhatsApp feedback per rep using Claude Haiku
+async function generateRepFeedback(rep) {
+  try {
+    const repslyPrompt =
+      `Rep: ${rep.repName}\n` +
+      `Check-ins: ${rep.checkIns}, Stores visited: ${rep.storesVisited}, ` +
+      `Photos: ${rep.photos}, Forms completed: ${rep.formsCompleted}, ` +
+      `KM travelled: ${rep.kmTravelled}\n` +
+      `Forms: ${rep.formNames.join(', ') || 'none'}\n` +
+      `Notes from Repsly: ${rep.notes.slice(0, 5).join(' | ') || 'none'}\n\n` +
+      `Write ONE plain sentence of feedback on this rep's Repsly activity today. ` +
+      `Be direct — highlight what was good or flag if activity is low. No fluff.`;
+
+    const waPrompt =
+      `Rep: ${rep.repName}\n` +
+      `WhatsApp messages today: ${rep.waMessages}\n` +
+      `Photos sent on WhatsApp: ${rep.waPhotos}\n` +
+      `Activity summaries: ${rep.waActivity.slice(0, 5).join(' | ') || 'no activity recorded'}\n\n` +
+      `Write ONE plain sentence of feedback on this rep's WhatsApp communication today. ` +
+      `Note if they were communicative, quiet, or flagged any issues. No fluff.`;
+
+    const [repslyRes, waRes] = await Promise.all([
+      anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 100,
+        messages: [{ role: 'user', content: repslyPrompt }]
+      }),
+      anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 100,
+        messages: [{ role: 'user', content: waPrompt }]
+      })
+    ]);
+
+    return {
+      repslyFeedback: repslyRes.content[0].text.trim(),
+      waFeedback: waRes.content[0].text.trim()
+    };
+  } catch (err) {
+    console.error(`[Report] Feedback generation failed for ${rep.repName}:`, err.message);
+    return { repslyFeedback: '', waFeedback: '' };
+  }
+}
+
+// Enrich all reps in a report with AI-generated feedback (call after buildTeamReport)
+async function enrichWithFeedback(reportData) {
+  const enriched = await Promise.all(
+    reportData.reps.map(async (rep) => {
+      const feedback = await generateRepFeedback(rep);
+      return { ...rep, ...feedback };
+    })
+  );
+  return { ...reportData, reps: enriched };
+}
+
 module.exports = {
   buildTeamReport,
+  enrichWithFeedback,
   formatEmailHTML,
   formatWASummary
 };

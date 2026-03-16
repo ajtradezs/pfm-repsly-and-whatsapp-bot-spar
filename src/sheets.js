@@ -17,7 +17,9 @@ const HEADERS = [
   'Notes',
   'WhatsApp Activity',
   'Last WA Message Time',
-  'Repsly Synced'
+  'Repsly Synced',
+  'Repsly Feedback',
+  'WhatsApp Feedback'
 ];
 
 async function getAuth() {
@@ -73,7 +75,7 @@ async function ensureHeaders(teamName) {
 
   try {
     const sheets = await getSheetsClient();
-    const range = `'${teamName}'!A1:L1`;
+    const range = `'${teamName}'!A1:N1`;
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range
@@ -101,7 +103,7 @@ async function getAllRows(teamName) {
     const sheets = await getSheetsClient();
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `'${teamName}'!A:L`
+      range: `'${teamName}'!A:N`
     });
     return res.data.values || [];
   } catch (err) {
@@ -138,7 +140,9 @@ async function logRepDay(teamName, repData) {
     notesStr,
     waActivityStr,
     repData.lastWaTime || '',
-    new Date().toISOString()
+    new Date().toISOString(),
+    repData.repslyFeedback || '',
+    repData.waFeedback || ''
   ];
 
   try {
@@ -160,7 +164,7 @@ async function logRepDay(teamName, repData) {
       const rowNum = existingRowIndex + 1;
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `'${teamName}'!A${rowNum}:L${rowNum}`,
+        range: `'${teamName}'!A${rowNum}:N${rowNum}`,
         valueInputOption: 'RAW',
         requestBody: { values: [row] }
       });
@@ -168,7 +172,7 @@ async function logRepDay(teamName, repData) {
       // Append new row
       await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
-        range: `'${teamName}'!A:L`,
+        range: `'${teamName}'!A:N`,
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
         requestBody: { values: [row] }

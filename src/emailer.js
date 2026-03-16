@@ -5,7 +5,7 @@ const { teams } = require('../config/teams');
 const { getDailyRepSummary } = require('./repsly');
 const { getWhatsAppActivity, clearWhatsAppActivity, sendToNumber } = require('./whatsapp');
 const { logRepDay } = require('./sheets');
-const { buildTeamReport, formatEmailHTML, formatWASummary } = require('./report');
+const { buildTeamReport, enrichWithFeedback, formatEmailHTML, formatWASummary } = require('./report');
 
 const GMAIL_USER = process.env.GMAIL_USER;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
@@ -82,8 +82,9 @@ async function runReportForTeam(team, reportType) {
   // 2. Get WA activity
   const waData = getWhatsAppActivity(team.name);
 
-  // 3. Build report
-  const reportData = buildTeamReport(team.name, repslyData, waData);
+  // 3. Build report + enrich with AI feedback
+  const rawReport = buildTeamReport(team.name, repslyData, waData);
+  const reportData = await enrichWithFeedback(rawReport);
 
   // 4. Log each rep to Google Sheets
   for (const rep of reportData.reps) {
@@ -98,7 +99,9 @@ async function runReportForTeam(team, reportType) {
       kmTravelled: rep.kmTravelled,
       notes: rep.notes,
       waActivity: rep.waMessages,
-      lastWaTime: rep.lastWaTime || ''
+      lastWaTime: rep.lastWaTime || '',
+      repslyFeedback: rep.repslyFeedback || '',
+      waFeedback: rep.waFeedback || ''
     });
   }
 
