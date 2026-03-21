@@ -10,13 +10,13 @@ const path    = require('path');
 const fs      = require('fs');
 const Anthropic = require('@anthropic-ai/sdk');
 
-const TUNNEL_URL_FILE = path.join(__dirname, '..', 'data', 'tunnel-url.txt');
+const TUNNEL_URL_FILE    = path.join(__dirname, '..', 'data', 'tunnel-url.txt');
+const TUNNEL_URL_MAX_AGE = 2 * 60 * 60 * 1000; // 2 hours — discard stale tunnel URLs after crashes
 
 const {
   initDb,
-  getGroups,
+  getAllGroupsWithSummary,
   getGroupWithMemberActivity,
-  getGroupSummary,
   getMessages,
   getMemberDetail,
   getMemberMessages,
@@ -49,21 +49,28 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * Read tunnel URL from disk only if the file was written recently.
+ * Prevents showing a dead URL if the tunnel process crashed without cleanup.
+ */
+function readTunnelUrl() {
+  try {
+    const stat = fs.statSync(TUNNEL_URL_FILE);
+    if (Date.now() - stat.mtimeMs > TUNNEL_URL_MAX_AGE) return null;
+    return fs.readFileSync(TUNNEL_URL_FILE, 'utf8').trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Routes ─────────────────────────────────────────────────────────────────
 
 // GET /api/config — branding info for the frontend
 app.get('/api/config', (req, res) => {
-  let tunnelUrl = null;
-  try {
-    if (fs.existsSync(TUNNEL_URL_FILE)) {
-      tunnelUrl = fs.readFileSync(TUNNEL_URL_FILE, 'utf8').trim();
-    }
-  } catch (_) {}
-
   res.json({
     companyName:    process.env.COMPANY_NAME    || 'Dashboard',
     companyLogoUrl: process.env.COMPANY_LOGO_URL || null,
-    tunnelUrl
+    tunnelUrl:      readTunnelUrl()
   });
 });
 
@@ -76,16 +83,11 @@ app.get('/api/dates', (req, res) => {
   }
 });
 
-// GET /api/groups — list of all configured groups with summary stats
+// GET /api/groups — all groups with summary stats in a single query
 app.get('/api/groups', (req, res) => {
   try {
-    const date   = req.query.date || today();
-    const groups = getGroups();
-    const result = groups.map(g => {
-      const summary = getGroupSummary(g.id, date);
-      return { ...g, date, ...summary };
-    });
-    res.json(result);
+    const date = req.query.date || today();
+    res.json(getAllGroupsWithSummary(date).map(g => ({ ...g, date })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -98,9 +100,8 @@ app.get('/api/groups/:id', (req, res) => {
     const detail = getGroupWithMemberActivity(parseInt(req.params.id), date);
     if (!detail) return res.status(404).json({ error: 'Group not found' });
 
-    // Attach cached summary if it exists
     const summary = getSummary('group', detail.group.id, date);
-    detail.cachedSummary = summary ? summary.summary_text : null;
+    detail.cachedSummary      = summary ? summary.summary_text : null;
     detail.summaryGeneratedAt = summary ? summary.generated_at : null;
 
     res.json(detail);
@@ -122,10 +123,10 @@ app.get('/api/groups/:id/messages', (req, res) => {
 // GET /api/members/:id — member detail with daily stats across a date range
 app.get('/api/members/:id', (req, res) => {
   try {
+    const dateTo   = req.query.dateTo   || today();
     const dateFrom = req.query.dateFrom || (() => {
-      const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10);
+      const d = new Date(dateTo); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10);
     })();
-    const dateTo = req.query.dateTo || today();
     const detail = getMemberDetail(parseInt(req.params.id), dateFrom, dateTo);
     if (!detail) return res.status(404).json({ error: 'Member not found' });
     res.json(detail);
@@ -170,16 +171,12 @@ app.post('/api/summaries/generate', async (req, res) => {
     return res.status(429).json({ error: 'Generation already in progress' });
   }
 
+  // Add key before the try so finally always cleans it up, even on early returns
+  generatingKeys.add(key);
   try {
-    generatingKeys.add(key);
-
-    // Gather messages for context
-    let messages;
-    if (scope === 'group') {
-      messages = getMessages(scopeId, date);
-    } else {
-      messages = getMemberMessages(scopeId, date);
-    }
+    const messages = scope === 'group'
+      ? getMessages(scopeId, date)
+      : getMemberMessages(scopeId, date);
 
     if (messages.length === 0) {
       return res.status(404).json({ error: 'No messages found for this date' });
@@ -190,9 +187,9 @@ app.post('/api/summaries/generate', async (req, res) => {
     ).join('\n');
 
     const scopeLabel = scope === 'group' ? 'WhatsApp group' : 'sales representative';
+    const anthropic  = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const response  = await anthropic.messages.create({
+    const response = await anthropic.messages.create({
       model:      'claude-haiku-4-5-20251001',
       max_tokens: 300,
       messages: [{
@@ -203,7 +200,6 @@ app.post('/api/summaries/generate', async (req, res) => {
 
     const summaryText = response.content[0].text.trim();
     upsertSummary(scope, scopeId, date, summaryText);
-
     res.json({ summary_text: summaryText, generated_at: new Date().toISOString() });
   } catch (err) {
     res.status(500).json({ error: err.message });

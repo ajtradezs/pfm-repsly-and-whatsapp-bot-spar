@@ -56,7 +56,8 @@ function dateRangeBack(days) {
 }
 
 // ── API ────────────────────────────────────────────────────────
-const PASS = localStorage.getItem('dashKey') || '';
+// sessionStorage: cleared when the browser tab/window closes, unlike localStorage
+const PASS = sessionStorage.getItem('dashKey') || '';
 
 async function api(url) {
   if (state.cache[url]) return state.cache[url];
@@ -65,7 +66,7 @@ async function api(url) {
   if (res.status === 401) {
     const key = prompt('Dashboard password:');
     if (key) {
-      localStorage.setItem('dashKey', key);
+      sessionStorage.setItem('dashKey', key);
       location.reload();
     }
     throw new Error('Unauthorized');
@@ -122,7 +123,12 @@ function renderBreadcrumb() {
 }
 
 function esc(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;'); // prevent breaking out of JS string literals in onclick attributes
 }
 
 // ── Main render dispatcher ──────────────────────────────────────
@@ -377,9 +383,11 @@ async function generateMemberSummary(memberId, containerId) {
 
 function setMemberRange(days) {
   state.memberRange = days;
-  // Bust member cache
+  // Bust all cache entries for this member (stats + messages)
   const prefix = `/api/members/${state.selectedMemberId}`;
-  Object.keys(state.cache).forEach(k => { if (k.startsWith(prefix)) delete state.cache[k]; });
+  Object.keys(state.cache).forEach(k => {
+    if (k.startsWith(prefix)) delete state.cache[k];
+  });
   render();
 }
 
