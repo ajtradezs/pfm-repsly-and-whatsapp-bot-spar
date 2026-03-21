@@ -30,6 +30,23 @@ module.exports = {
       error_file: 'logs/dashboard-error.log',
       out_file: 'logs/dashboard-out.log',
       merge_logs: true
+    },
+    {
+      // Optional: only starts if NGROK_AUTHTOKEN is set in .env
+      // Exposes the dashboard at a public HTTPS URL for sharing
+      name: 'pfm-tunnel',
+      script: 'src/tunnel.js',
+      watch: false,
+      restart_delay: 10000,
+      max_restarts: 5,
+      min_uptime: '10s',
+      env: {
+        NODE_ENV: 'production'
+      },
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      error_file: 'logs/tunnel-error.log',
+      out_file: 'logs/tunnel-out.log',
+      merge_logs: true
     }
   ]
 };

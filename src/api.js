@@ -7,7 +7,10 @@
 require('dotenv').config();
 const express = require('express');
 const path    = require('path');
+const fs      = require('fs');
 const Anthropic = require('@anthropic-ai/sdk');
+
+const TUNNEL_URL_FILE = path.join(__dirname, '..', 'data', 'tunnel-url.txt');
 
 const {
   initDb,
@@ -50,9 +53,17 @@ function today() {
 
 // GET /api/config — branding info for the frontend
 app.get('/api/config', (req, res) => {
+  let tunnelUrl = null;
+  try {
+    if (fs.existsSync(TUNNEL_URL_FILE)) {
+      tunnelUrl = fs.readFileSync(TUNNEL_URL_FILE, 'utf8').trim();
+    }
+  } catch (_) {}
+
   res.json({
     companyName:    process.env.COMPANY_NAME    || 'Dashboard',
-    companyLogoUrl: process.env.COMPANY_LOGO_URL || null
+    companyLogoUrl: process.env.COMPANY_LOGO_URL || null,
+    tunnelUrl
   });
 });
 

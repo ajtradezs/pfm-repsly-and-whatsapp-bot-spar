@@ -418,6 +418,21 @@ async function init() {
       logo.src = cfg.companyLogoUrl;
       logo.classList.remove('hidden');
     }
+    // Show share link if tunnel is active
+    if (cfg.tunnelUrl) {
+      const shareBtn = document.createElement('button');
+      shareBtn.className = 'btn btn-outline btn-sm';
+      shareBtn.title = 'Copy shareable public link';
+      shareBtn.innerHTML = '&#128279; Share';
+      shareBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(cfg.tunnelUrl).then(() => {
+          showToast('Link copied! Anyone with this URL can view the dashboard.');
+        }).catch(() => {
+          prompt('Copy this link to share:', cfg.tunnelUrl);
+        });
+      });
+      document.getElementById('refreshBtn').insertAdjacentElement('afterend', shareBtn);
+    }
   } catch (_) {}
 
   // Set date picker
