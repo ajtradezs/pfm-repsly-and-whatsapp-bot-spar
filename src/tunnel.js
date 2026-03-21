@@ -30,8 +30,10 @@ async function start() {
   const listener = await ngrok.forward({
     addr:      PORT,
     authtoken: AUTH,
-    // Uncomment to use a fixed custom domain (paid ngrok plan):
-    // domain: process.env.NGROK_DOMAIN
+    // Use static domain if set (free: 1 static domain per ngrok account).
+    // Set NGROK_DOMAIN in .env to your static ngrok subdomain.
+    // Without this, the URL changes every restart.
+    ...(process.env.NGROK_DOMAIN ? { domain: process.env.NGROK_DOMAIN } : {})
   });
 
   const url = listener.url();
@@ -41,10 +43,17 @@ async function start() {
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(URL_FILE, url, 'utf8');
 
+  const isStatic = !!process.env.NGROK_DOMAIN;
   console.log('[Tunnel] ─────────────────────────────────────────────');
   console.log(`[Tunnel] Public URL: ${url}`);
   console.log('[Tunnel] Share this link with directors or clients.');
-  console.log('[Tunnel] The URL changes each restart (upgrade to ngrok paid for a fixed domain).');
+  if (isStatic) {
+    console.log('[Tunnel] ✓ Static domain — this URL is permanent.');
+  } else {
+    console.log('[Tunnel] ⚠ Random URL — changes on every restart.');
+    console.log('[Tunnel]   Get a free static domain: dashboard.ngrok.com → Cloud Edge → Domains');
+    console.log('[Tunnel]   Then set NGROK_DOMAIN=your-subdomain.ngrok-free.app in .env');
+  }
   console.log('[Tunnel] ─────────────────────────────────────────────');
 
   // Keep process alive
