@@ -3,7 +3,14 @@
   "version": "1.0.0",
   "scripts": {
     "start": "node src/index.js",
-    "setup": "node setup.js"
+    "setup": "node setup.js",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop pfm-repsly-bot",
+    "pm2:logs": "pm2 logs pfm-repsly-bot",
+    "pm2:status": "pm2 status"
+  },
+  "devDependencies": {
+    "pm2": "^5.3.0"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.0",

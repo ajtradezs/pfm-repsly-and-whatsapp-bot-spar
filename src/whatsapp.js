@@ -167,6 +167,15 @@ function initClient(onReady) {
   client.on('disconnected', (reason) => {
     isReady = false;
     console.warn('[WhatsApp] Disconnected:', reason);
+    console.log('[WhatsApp] Attempting reconnect in 15s...');
+    setTimeout(async () => {
+      try {
+        await client.initialize();
+        console.log('[WhatsApp] Reconnect initiated.');
+      } catch (e) {
+        console.error('[WhatsApp] Reconnect failed:', e.message);
+      }
+    }, 15000);
   });
 
   client.initialize();

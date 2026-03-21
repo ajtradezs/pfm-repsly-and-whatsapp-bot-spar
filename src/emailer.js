@@ -160,13 +160,13 @@ async function runAllReports(reportType) {
 function scheduleReports() {
   // Midday report: 12:00 on weekdays
   cron.schedule('0 12 * * 1-5', async () => {
-    console.log('[Cron] Triggering midday reports...');
+    console.log(`[Cron] Midday report triggered at ${new Date().toISOString()}`);
     await runAllReports('midday');
   });
 
   // EOD report: 19:00 on weekdays
   cron.schedule('0 19 * * 1-5', async () => {
-    console.log('[Cron] Triggering EOD reports...');
+    console.log(`[Cron] EOD report triggered at ${new Date().toISOString()}`);
     await runAllReports('eod');
   });
 
