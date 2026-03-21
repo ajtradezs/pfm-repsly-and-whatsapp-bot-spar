@@ -207,10 +207,20 @@ app.get('*', (req, res) => {
 });
 
 // ── Start ──────────────────────────────────────────────────────────────────
+// DASHBOARD_HOST defaults to 0.0.0.0 so directors on the same network
+// can access the dashboard at http://[bot-laptop-ip]:3001
+// Set DASHBOARD_HOST=127.0.0.1 to restrict to localhost only.
+const HOST = process.env.DASHBOARD_HOST || '0.0.0.0';
+
 try {
   initDb();
-  app.listen(PORT, () => {
-    console.log(`[Dashboard] Server running at http://localhost:${PORT}`);
+  app.listen(PORT, HOST, () => {
+    const iface = HOST === '0.0.0.0' ? 'all network interfaces' : HOST;
+    console.log(`[Dashboard] Server running on ${iface} at port ${PORT}`);
+    console.log(`[Dashboard] Local:   http://localhost:${PORT}`);
+    if (HOST === '0.0.0.0') {
+      console.log(`[Dashboard] Network: http://[this-machine-ip]:${PORT}  ← directors use this`);
+    }
   });
 } catch (err) {
   console.error('[Dashboard] Failed to start:', err.message);
