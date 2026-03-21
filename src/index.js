@@ -3,6 +3,7 @@ const { initClient } = require('./whatsapp');
 const { scheduleReports } = require('./emailer');
 const { ensureSheetExists, ensureHeaders } = require('./sheets');
 const { teams } = require('../config/teams');
+const { initDb, insertGroup } = require('./db');
 
 // Print masked env var status
 function printEnvStatus() {
@@ -58,6 +59,20 @@ async function main() {
 
   console.log('Starting Rep Activity Agent...');
   printEnvStatus();
+
+  // Initialize SQLite dashboard database + seed groups
+  try {
+    initDb();
+    for (const team of teams) {
+      const groupId = process.env[team.groupIdEnvVar];
+      if (groupId && groupId.trim()) {
+        insertGroup(groupId.trim(), team.name);
+      }
+    }
+    console.log('[Index] Dashboard DB initialised.');
+  } catch (err) {
+    console.error('[Index] Dashboard DB init failed (non-fatal):', err.message);
+  }
 
   // Initialize Google Sheets tabs
   console.log('[Index] Initializing Google Sheets...');

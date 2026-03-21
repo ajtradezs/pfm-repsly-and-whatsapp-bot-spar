@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "scripts": {
     "start": "node src/index.js",
+    "dashboard": "node src/api.js",
     "setup": "node setup.js",
     "pm2:start": "pm2 start ecosystem.config.js",
-    "pm2:stop": "pm2 stop pfm-repsly-bot",
+    "pm2:stop": "pm2 stop all",
     "pm2:logs": "pm2 logs pfm-repsly-bot",
+    "pm2:logs:dashboard": "pm2 logs pfm-dashboard",
     "pm2:status": "pm2 status"
   },
   "devDependencies": {
@@ -15,7 +17,9 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.0",
     "axios": "^1.7.0",
+    "better-sqlite3": "^9.4.3",
     "dotenv": "^16.4.5",
+    "express": "^4.18.3",
     "googleapis": "^140.0.0",
     "node-cron": "^3.0.3",
     "nodemailer": "^6.9.16",

@@ -4,6 +4,7 @@ const qrcode = require('qrcode-terminal');
 const Anthropic = require('@anthropic-ai/sdk');
 const { teams } = require('../config/teams');
 const { uploadImage } = require('./drive');
+const db = require('./db');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -129,6 +130,25 @@ async function handleMessage(msg, groupTeamMap) {
     photoUrl,
     parsed
   });
+
+  // Persist message to dashboard SQLite database
+  try {
+    const date      = timestamp.toISOString().slice(0, 10);
+    const dbGroupId = db.insertGroup(groupId, team.name);
+    const dbMemberId = db.upsertMember(dbGroupId, repName);
+    db.insertMessage(
+      dbGroupId,
+      dbMemberId,
+      date,
+      timestamp.toISOString(),
+      messageText,
+      parsed.activity_type,
+      parsed.store_mentioned,
+      photoUrl
+    );
+  } catch (dbErr) {
+    console.error('[WhatsApp] DB write error (non-fatal):', dbErr.message);
+  }
 
   console.log(`[WhatsApp] [${team.name}] Message from ${senderName} → ${parsed.activity_type}: ${parsed.summary}`);
 }
